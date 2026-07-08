@@ -1,5 +1,7 @@
 # Panda Pick Robot Simulation Learning
 
+Robot task planning and MuJoCo simulation tools for mobile manipulation research.
+
 This folder is a small robosuite learning workspace built around a Panda arm in
 the `Lift` task.
 
