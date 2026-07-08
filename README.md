@@ -14,23 +14,24 @@ the `Lift` task.
 
 Checked on 2026-07-08:
 
-- System `python3` is available, but does not have `robosuite` installed.
-- Conda environment `mujoco` has `robosuite`, but importing it currently fails
-  because `libGL.so.1` is missing.
+- System `python3` is available, but does not have the simulation dependencies.
+- Conda environment `mujoco` has `robosuite` and can run a short no-render
+  smoke test.
+- `libGL.so.1` was installed into the `mujoco` conda environment with
+  `conda install -n mujoco -c conda-forge libgl -y`.
 
-Typical fix on Ubuntu:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y libgl1
-```
-
-After that, run:
+Run the demo with:
 
 ```bash
 source /home/hzm/anaconda3/etc/profile.d/conda.sh
 conda activate mujoco
-python panda_pick.py
+python panda_pick.py --steps 500
+```
+
+For a non-rendering smoke test:
+
+```bash
+python panda_pick.py --no-render --steps 100 --print-every 20
 ```
 
 ## Learning Roadmap
@@ -54,10 +55,11 @@ python panda_pick.py
 `panda_pick.py` currently:
 
 1. Creates `Lift` with robot `Panda`.
-2. Prints `env.action_dim` and observation keys.
-3. Sends zero actions at first.
-4. Closes the gripper after step 100.
-5. Moves one action dimension between steps 200 and 300.
-6. Renders continuously.
+2. Prints `env.action_dim`, render mode, step count, and observation keys.
+3. Runs for a configurable number of steps instead of looping forever.
+4. Sends zero arm actions at first.
+5. Closes the gripper after step 100.
+6. Moves one action dimension between steps 200 and 300.
+7. Supports `--no-render`, `--steps`, `--print-every`, `--sleep`, and `--reset-on-done`.
 
 This is useful as a smoke test, but it is not yet a real pick-and-place policy.
