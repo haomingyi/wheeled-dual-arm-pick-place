@@ -52,10 +52,18 @@ Check Gazebo:
 ```bash
 which gz
 gz sim --versions
-gz sim sim_gazebo/worlds/mobile_base_minimal.sdf
+./run_gazebo_minimal.sh
 ```
 
 If the GUI opens and shows a simple two-wheel base on a ground plane, the minimal Gazebo test passed.
+
+If you launch the project from a Snap-packaged editor terminal and see a `libpthread.so.0` / `GLIBC_PRIVATE` symbol lookup error, use `./run_gazebo_minimal.sh` instead of calling `gz sim` directly. The wrapper clears Snap-specific environment variables and adds the Gazebo vendor library paths installed by ROS 2 Jazzy.
+
+For a no-GUI server check:
+
+```bash
+./run_gazebo_minimal.sh --server-only
+```
 
 Learn: SDF, world, model, link, joint, plugin, ROS-Gazebo integration.
 
