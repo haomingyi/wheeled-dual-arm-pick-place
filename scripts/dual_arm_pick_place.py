@@ -1,4 +1,5 @@
 import argparse
+import csv
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,8 @@ TRAY_POS = np.array([0.0, 0.905, 0.465])
 TRAY_TARGET_LOCAL = np.array([0.0, 0.055, 0.046])
 LEFT_GRIP_WORKPIECE_OFFSET = np.array([0.061, 0.011, -0.032])
 RIGHT_GRIP_TRAY_OFFSET = np.array([-0.0055, 0.1438, -0.0369])
+PLACEMENT_SUCCESS_THRESHOLD = 0.03
+BASE_SUCCESS_THRESHOLD = 0.03
 
 
 @dataclass(frozen=True)
@@ -111,6 +114,11 @@ def build_maps(model):
         for i in range(model.nu)
     }
     return joint_qpos, actuator_id
+
+
+def site_pos(model, data, name):
+    site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, name)
+    return data.site_xpos[site_id].copy()
 
 
 def set_base_pose(model, data, joint_qpos, actuator_id, base_y, wheel_angle):
@@ -184,13 +192,91 @@ def sample_stage(t):
     return last.name, last.base_y, last.left, last.right, last.left_gripper, last.right_gripper, last.workpiece, last.workpiece_attached, last.tray_attached
 
 
-def run(headless=False, realtime=1.0):
+def make_log_row(model, data, joint_qpos, t, stage_name, tray_target):
+    base_qadr = joint_qpos["base_footprint_joint"]
+    tray_qadr = joint_qpos["tray_free"]
+    workpiece_qadr = joint_qpos["workpiece_free"]
+
+    base_pos = data.qpos[base_qadr : base_qadr + 3].copy()
+    tray_pos = data.qpos[tray_qadr : tray_qadr + 3].copy()
+    workpiece_pos = data.qpos[workpiece_qadr : workpiece_qadr + 3].copy()
+    left_grip = site_pos(model, data, "left_grip_center")
+    right_grip = site_pos(model, data, "right_grip_center")
+    placement_error = float(np.linalg.norm(workpiece_pos - tray_target))
+
+    row = {
+        "time": t,
+        "stage": stage_name,
+        "base_x": base_pos[0],
+        "base_y": base_pos[1],
+        "base_z": base_pos[2],
+        "left_gripper_x": left_grip[0],
+        "left_gripper_y": left_grip[1],
+        "left_gripper_z": left_grip[2],
+        "right_gripper_x": right_grip[0],
+        "right_gripper_y": right_grip[1],
+        "right_gripper_z": right_grip[2],
+        "tray_x": tray_pos[0],
+        "tray_y": tray_pos[1],
+        "tray_z": tray_pos[2],
+        "workpiece_x": workpiece_pos[0],
+        "workpiece_y": workpiece_pos[1],
+        "workpiece_z": workpiece_pos[2],
+        "target_x": tray_target[0],
+        "target_y": tray_target[1],
+        "target_z": tray_target[2],
+        "placement_error": placement_error,
+    }
+    return row
+
+
+def summarize_rows(rows):
+    if not rows:
+        return {
+            "success": False,
+            "final_placement_error": float("inf"),
+            "max_workpiece_height": 0.0,
+            "final_base_error": float("inf"),
+            "final_stage": "",
+        }
+
+    final = rows[-1]
+    final_placement_error = float(final["placement_error"])
+    final_base_error = abs(float(final["base_y"]) - STAGES[-1].base_y)
+    max_workpiece_height = max(float(row["workpiece_z"]) for row in rows)
+    success = (
+        final_placement_error <= PLACEMENT_SUCCESS_THRESHOLD
+        and final_base_error <= BASE_SUCCESS_THRESHOLD
+        and final["stage"] == STAGES[-1].name
+    )
+    return {
+        "success": success,
+        "final_placement_error": final_placement_error,
+        "max_workpiece_height": max_workpiece_height,
+        "final_base_error": final_base_error,
+        "final_stage": final["stage"],
+    }
+
+
+def write_log(log_file, rows):
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    with log_file.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def run(headless=False, realtime=1.0, log_file=None, log_every=10):
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     data = mujoco.MjData(model)
     joint_qpos, actuator_id = build_maps(model)
     total_time = sum(stage.duration for stage in STAGES[1:])
+    rows = []
+    step_count = 0
+    log_every = max(1, log_every)
 
     def step_once(t):
+        nonlocal step_count
         stage_name, base_y, left, right, left_gripper, right_gripper, workpiece, attached, tray_attached = sample_stage(t)
         wheel_angle = -(base_y - STAGES[0].base_y) / WHEEL_RADIUS
         set_base_pose(model, data, joint_qpos, actuator_id, base_y, wheel_angle)
@@ -211,15 +297,20 @@ def run(headless=False, realtime=1.0):
         set_workpiece_pose(model, data, joint_qpos, workpiece)
         mujoco.mj_forward(model, data)
         mujoco.mj_step(model, data)
+        step_count += 1
+
+        should_log = (headless or log_file is not None) and (step_count % log_every == 0 or t >= total_time)
+        if should_log:
+            rows.append(make_log_row(model, data, joint_qpos, t, stage_name, tray_target))
 
     if headless:
         t = 0.0
         while t <= total_time:
             step_once(t)
             t += model.opt.timestep
-        qadr = joint_qpos["workpiece_free"]
-        base_qadr = joint_qpos["base_footprint_joint"]
-        return data.qpos[qadr : qadr + 3].copy(), data.qpos[base_qadr : base_qadr + 3].copy()
+        if log_file is not None and rows:
+            write_log(Path(log_file), rows)
+        return summarize_rows(rows)
 
     print("Wheeled Dual-Arm Pick-and-Place demo")
     print("Model:", MODEL_PATH)
@@ -233,16 +324,26 @@ def run(headless=False, realtime=1.0):
             viewer.sync()
             time.sleep(model.opt.timestep)
 
+    if log_file is not None and rows:
+        write_log(Path(log_file), rows)
+    return summarize_rows(rows)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Wheeled Dual-Arm Pick-and-Place demo.")
     parser.add_argument("--headless", action="store_true", help="Run one sequence without opening the viewer.")
     parser.add_argument("--realtime", type=float, default=1.0, help="Playback speed multiplier for the viewer.")
+    parser.add_argument("--log-file", type=Path, help="Write per-step diagnostics to a CSV file.")
+    parser.add_argument("--log-every", type=int, default=10, help="Record one row every N simulation steps.")
     args = parser.parse_args()
-    result = run(headless=args.headless, realtime=args.realtime)
+    result = run(headless=args.headless, realtime=args.realtime, log_file=args.log_file, log_every=args.log_every)
     if args.headless:
-        workpiece_pos, base_pos = result
-        print("headless_ok base_pos", np.round(base_pos, 4), "final_workpiece_pos", np.round(workpiece_pos, 4))
+        print(
+            "headless_ok success={success} final_placement_error={final_placement_error:.4f} "
+            "max_workpiece_height={max_workpiece_height:.4f} final_base_error={final_base_error:.4f}".format(
+                **result
+            )
+        )
 
 
 if __name__ == "__main__":

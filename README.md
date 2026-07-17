@@ -17,6 +17,7 @@ The goal is not only to play an animation, but to grow this into a debuggable, m
 
 - `models/wheeled_dual_arm/`: wheeled dual-arm robot model, table, tray, workpiece, and required STL meshes.
 - `scripts/dual_arm_pick_place.py`: the main demo script with staged control for the base, dual arms, grippers, tray, and workpiece.
+- `scripts/evaluate_dual_arm.py`: repeated headless evaluation for the wheeled dual-arm task.
 - `run_dual_arm.sh`: one-command launcher for the MuJoCo Viewer.
 - `manipulation_benchmark.py`: legacy single-arm robosuite baseline kept for comparison and learning.
 - `scripts/evaluate_policy.py`: repeated evaluation script for the legacy baseline.
@@ -46,6 +47,18 @@ Run a headless check without opening a window:
 
 ```bash
 python scripts/dual_arm_pick_place.py --headless
+```
+
+Save per-step diagnostics to CSV:
+
+```bash
+python scripts/dual_arm_pick_place.py --headless --log-file logs/dual_arm_run.csv
+```
+
+Run repeated headless evaluations:
+
+```bash
+python scripts/evaluate_dual_arm.py --runs 5
 ```
 
 Change playback speed:
@@ -79,6 +92,8 @@ If coordinate-frame cylinders or site markers look too large, adjust the related
 
 The main dual-arm demo currently uses a staged scripted controller. It is useful for learning model structure, Viewer debugging, trajectory flow, and task definition. It is not yet a full physics-based grasp planner.
 
+The dual-arm evaluation reports success, final placement error, maximum workpiece height, final base error, and the per-run CSV log path.
+
 The legacy single-arm baseline is still available:
 
 ```bash
@@ -91,9 +106,7 @@ python scripts/plot_run.py logs/pick.csv --output outputs/pick_diagnostics.png
 ## Roadmap
 
 1. Document the wheeled dual-arm model, joint table, actuator table, and coordinate frames.
-2. Add CSV logging for the dual-arm demo: stage, base pose, gripper poses, tray pose, and workpiece pose.
-3. Add a dual-arm evaluation script for task completion, grasp state, placement accuracy, and final error.
-4. Add diagnostic plots for base trajectory, gripper trajectory, workpiece height, and stage timeline.
-5. Replace scripted object attachment with more realistic contact-based grasping and constraints.
-6. Add cameras, sensors, and dataset export for imitation learning or reinforcement learning.
-7. Prepare a demo GIF, metrics summary, and resume-ready project description.
+2. Add diagnostic plots for base trajectory, gripper trajectory, workpiece height, and stage timeline.
+3. Replace scripted object attachment with more realistic contact-based grasping and constraints.
+4. Add cameras, sensors, and dataset export for imitation learning or reinforcement learning.
+5. Prepare a demo GIF, metrics summary, and resume-ready project description.
