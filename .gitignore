@@ -27,3 +27,7 @@ checkpoints/
 *.npz
 
 .DS_Store
+
+# The raw CAD/URDF workspace is a local reference input. Curated,
+# redistributable robot-description files can be imported when required.
+/urdf_sldasm/

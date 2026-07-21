@@ -6,6 +6,19 @@ This project is a MuJoCo simulation benchmark for wheeled dual-arm mobile manipu
 
 The current version is a stable learning baseline. The main MuJoCo task, repeated evaluation, contact diagnostics, Cartesian IK debugger, Gazebo smoke test, and Isaac Sim smoke test have been validated on the target workstation. Future work can build on this baseline without changing its documented run commands.
 
+## Hardware Integration
+
+This repository remains the digital-twin and simulation workspace. Real-machine
+commissioning for the Huacheng controller and the two seven-axis IPE arms lives in
+[dual-arm-7dof-control](https://github.com/haomingyi/dual-arm-7dof-control).
+
+The local raw `urdf_sldasm/` workspace is intentionally excluded from Git. Its
+URDF and meshes can later be reviewed and selectively imported into the control
+repository as the robot description. The production control path is application
+to Huacheng SDK over Ethernet, then Huacheng controller to IPE joints over
+EtherCAT. Direct SOEM access is restricted to a physically isolated maintenance
+bench.
+
 ## Final Effect
 
 The current demo shows a complete wheeled dual-arm coordination sequence in the official MuJoCo Viewer:
